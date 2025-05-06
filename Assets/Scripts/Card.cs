@@ -30,6 +30,8 @@ public class CardSO : ScriptableObject // Inherit from ScriptableObject
         public float value;
     }
     // List of StatEntry objects to show stats in the Inspector
+    // NOTE: Modifying this list at runtime directly can be complex with ScriptableObjects.
+    // We will modify the runtime dictionary instead for gameplay effects.
     public List<StatEntry> statsList = new List<StatEntry>();
 
     // Runtime dictionary for easy access (populated from statsList)
@@ -65,8 +67,34 @@ public class CardSO : ScriptableObject // Inherit from ScriptableObject
         return defaultValue;
     }
 
+    // New method to add to a stat's value at runtime
+    // This modifies the runtime dictionary.
+    public void AddToStat(string statName, float valueToAdd)
+    {
+        // Ensure the dictionary is initialized
+        GetStatsDictionary();
+
+        if (_statsDictionary.ContainsKey(statName))
+        {
+            _statsDictionary[statName] += valueToAdd;
+            Debug.Log($"Added {valueToAdd} to stat '{statName}'. New value: {_statsDictionary[statName]} on card '{cardName}'.");
+        }
+        else
+        {
+            // If the stat doesn't exist, add it.
+            _statsDictionary[statName] = valueToAdd;
+            Debug.Log($"Stat '{statName}' did not exist on card '{cardName}', added with initial value: {valueToAdd}");
+
+            // Optional: If you want this reflected in the editor's statsList after playing
+            // (Be cautious, runtime modification of assets can be complex)
+            // statsList.Add(new StatEntry { name = statName, value = valueToAdd });
+        }
+        // No need to re-initialize _isStatsDictionaryInitialized = false; here
+        // as we are directly modifying the dictionary.
+    }
+
+
     // Optional: Reset the dictionary if statsList is modified in editor
-    // Useful if you modify statsList while playing in editor
     void OnValidate()
     {
         _isStatsDictionaryInitialized = false; // Mark for re-initialization

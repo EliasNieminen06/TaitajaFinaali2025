@@ -15,5 +15,5 @@ MonoBehaviour:
   cardName: Salad
   cardType: 0
   description: Fresh!
-  artwork: {fileID: 21300000, guid: cc56b70e65d1fe748ae2ddd05e9560ef, type: 3}
+  artwork: {fileID: 21300000, guid: d7b963f476da64444b2c3928c310a67c, type: 3}
   statsList: []

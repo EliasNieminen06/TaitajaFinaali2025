@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ca4683ecfb7f75458df7d482db98d63, type: 3}
+  m_Name: Salmon_soup
+  m_EditorClassIdentifier: 
+  recipeName: Salmon Soup
+  description: A delicious dish.
+  dishArtwork: {fileID: 0}
+  requiredIngredients:
+  - {fileID: 11400000, guid: aae1e813f4a1b5d4b8fca4fa3920b21c, type: 2}
+  - {fileID: 11400000, guid: b779b2fbd1362134fa00f87290765e60, type: 2}
+  requiredTools:
+  - {fileID: 11400000, guid: 59a1cf14f115d4342b173cb23d5b5564, type: 2}
+  requiredTechniques:
+  - {fileID: 11400000, guid: cf9704a4f1deb7f4a916d595f1899d32, type: 2}
+  targetStats:
+  - name: Saltiness
+    targetValue: 1
+  targetOutcomeDescription: Should be perfectly balanced.
