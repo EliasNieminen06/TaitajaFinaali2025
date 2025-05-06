@@ -1679,7 +1679,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1532226795
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2785,6 +2785,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fcb7ad214baf737488010f3e24c4bf65, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  menuSceneName: MainMenu
   allCardDefinitions: []
   deck1: {fileID: 1267557732}
   deck2: {fileID: 1313878597}
@@ -2806,9 +2807,10 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 48e62ecf9e9c89b48a5b92c65620b06d, type: 2}
   initialDeck2Cards:
   - {fileID: 0}
+  gameUIPanel: {fileID: 845319335}
+  drawPopupPanel: {fileID: 1532226794}
   handPanel: {fileID: 1485008621}
   cardUIPrefab: {fileID: 8276351205926674743, guid: 048d8042f9c57d34bb1b8ae94b528486, type: 3}
-  drawPopupPanel: {fileID: 1532226794}
   popupCardArtwork: {fileID: 608772683}
   popupCardName: {fileID: 2071717271}
   popupCardDescription: {fileID: 2087238435}
@@ -2817,6 +2819,8 @@ MonoBehaviour:
   combineButton: {fileID: 537775036}
   popupMessageText: {fileID: 324619851}
   handLimit: 6
+  maxDiscardsPerRound: 5
+  totalRounds: 5
 --- !u!4 &2099616393
 Transform:
   m_ObjectHideFlags: 0

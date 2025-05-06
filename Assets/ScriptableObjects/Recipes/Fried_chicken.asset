@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ca4683ecfb7f75458df7d482db98d63, type: 3}
+  m_Name: Fried_chicken
+  m_EditorClassIdentifier: 
+  recipeName: Fried Chicken
+  description: A delicious dish.
+  dishArtwork: {fileID: 0}
+  requiredIngredients:
+  - {fileID: 11400000, guid: 48ebdfd2fabeee14d980a2e7d6a27a32, type: 2}
+  requiredTools:
+  - {fileID: 11400000, guid: 3460e03ec3c30694698f453f63814035, type: 2}
+  requiredTechniques:
+  - {fileID: 11400000, guid: b1d890666c39e104d9ee27243d3e4a3e, type: 2}
+  targetStats:
+  - name: Spiciness
+    targetValue: 1
+  targetOutcomeDescription: Should be perfectly balanced.
