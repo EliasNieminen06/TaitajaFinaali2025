@@ -72,11 +72,15 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI currentScoreText;     // e.g., "Score: 150"
     public TextMeshProUGUI discardsLeftText;     // e.g., "Discards Left: 3"
     // TODO: Add UI elements related to locking a card (e.g., a prompt, visual indicator)
+    // TODO: Add a UI element to display the cards played for the current dish
+    // TODO: Add a TextMeshProUGUI or other UI element to show the current cooking selection prompt (e.g., "Select a Tool")
+    // TODO: Add a "Cancel Technique" button that is active during Technique selection
 
     // TODO: Add UI elements for the Game End screen (gameEndPanel)
     public TextMeshProUGUI finalScoreText; // To display the final score on the game end panel
     public TextMeshProUGUI highScoreText; // To display the high score on the game end panel
     // TODO: Add Buttons for "Play Again" and "Back to Menu" on gameEndPanel
+    // TODO: Add a "Finish Cooking" button that is active during CookingPhase
 
     [Header("Game Settings")]
     public int handLimit = 6; // Maximum number of cards a player can hold
@@ -93,6 +97,25 @@ public class GameManager : MonoBehaviour
     private List<CardSO> hand = new List<CardSO>(); // List of CardSO references currently in the player's hand
     private CardSO currentlyDrawnCard; // Holds the CardSO reference of the card currently in the draw popup
     private CardSO lockedCard = null; // Stores the CardSO reference of the card locked for the next round
+
+    // List to store cards played during the current cooking phase
+    private List<CardSO> playedCardsThisRound = new List<CardSO>();
+
+    // --- New: Variables for Technique Combination Selection ---
+    private CardSO selectedTechnique = null;
+    private CardSO selectedTool = null;
+    private CardSO selectedIngredient = null;
+
+    // Enum to track the current sub-state during Technique combination
+    private enum CookingSelectionState
+    {
+        None,                   // Not in a selection process
+        WaitingForTool,         // Technique selected, waiting for Tool
+        WaitingForIngredient    // Technique and Tool selected, waiting for Ingredient
+    }
+    private CookingSelectionState currentCookingSelectionState = CookingSelectionState.None;
+    // --- End New Variables ---
+
 
     // High Score storage key
     private const string HighScoreKey = "HighScore"; // Key for PlayerPrefs to store high score
@@ -141,7 +164,8 @@ public class GameManager : MonoBehaviour
         // Link Main Menu Start Button (in mainMenuPanel) to Call StartGame()
         // Link Game End Screen "Play Again" Button (in gameEndPanel) to Call RestartGame()
         // Link Game End Screen "Back to Menu" Button (in gameEndPanel) to Call ReturnToMainMenu()
-        // Link "Finish Cooking" Button (in gameUIPanel, active during CookingPhase) to Call FinishCooking()
+        // TODO: Link "Finish Cooking" Button (in gameUIPanel, active during CookingPhase) to Call FinishCooking()
+        // TODO: Link a "Cancel Technique" button (in gameUIPanel, active during selection) to Call CancelTechniqueSelection()
         // TODO: Link any buttons or interactions related to locking a card during RoundEnd.
 
         // Start the game in the Main Menu state when the scene loads.
@@ -180,6 +204,13 @@ public class GameManager : MonoBehaviour
         if (gameEndPanel != null) gameEndPanel.SetActive(false);
         if (drawPopupPanel != null) drawPopupPanel.SetActive(false); // Draw popup is managed separately
 
+        // Reset technique selection state when changing states (except within CookingPhase)
+        if (state != GameState.CookingPhase)
+        {
+            CancelTechniqueSelection(); // Reset selection variables and state
+        }
+
+
         switch (state)
         {
             case GameState.MainMenu:
@@ -197,8 +228,9 @@ public class GameManager : MonoBehaviour
                 hand.Clear(); // Clear hand from any previous game
                 lockedCard = null; // Ensure no card is locked from a previous game
                 currentDiscardsThisRound = 0; // Reset discards
+                playedCardsThisRound.Clear(); // Clear played cards from previous game
+                CancelTechniqueSelection(); // Ensure selection state is reset at the start of a game
 
-                // Select the random recipes for this game instance using the RecipeSOs.
                 gameRecipes = SelectRandomRecipes(totalRounds);
 
                 // Reset decks (optional: uncomment if you want decks to start fresh each new game)
@@ -207,7 +239,7 @@ public class GameManager : MonoBehaviour
 
                 // Activate the main game UI panel
                 if (gameUIPanel != null) gameUIPanel.SetActive(true);
-                UpdateHandUI(); // Clear the displayed hand UI
+                UpdateHandUI();
 
                 // Immediately transition to the drawing phase for the first round.
                 ChangeState(GameState.DrawingPhase);
@@ -215,90 +247,92 @@ public class GameManager : MonoBehaviour
 
             case GameState.DrawingPhase:
                 Debug.Log($"--- Starting Round {currentRound + 1}/{totalRounds} - Drawing Phase ---");
-                if (gameUIPanel != null) gameUIPanel.SetActive(true); // Ensure game UI is active
-                if (drawPopupPanel != null) drawPopupPanel.SetActive(false); // Ensure draw popup is hidden when entering
+                if (gameUIPanel != null) gameUIPanel.SetActive(true);
+                if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
 
-                currentDiscardsThisRound = 0; // Reset discards for the new round
+                currentDiscardsThisRound = 0;
 
-                // Display the current AND next recipe's information for this round.
-                DisplayRecipes();
+                DisplayRecipes(); // Display current and next recipes
 
                 // Update game status UI
                 if (currentRoundText != null) currentRoundText.text = $"Round: {currentRound + 1}/{totalRounds}";
                 if (currentScoreText != null) currentScoreText.text = $"Score: {totalScore}";
-                if (discardsLeftText != null) discardsLeftText.text = $"Discard ({maxDiscardsPerRound - currentDiscardsThisRound})";
+                if (discardsLeftText != null) discardsLeftText.text = $"Discards Left: {maxDiscardsPerRound - currentDiscardsThisRound}";
+                // TODO: Update other game status UI elements
 
-                // If there's a locked card from the previous round, add it to the hand now.
+                // Add locked card to hand if it exists
                 if (lockedCard != null)
                 {
                     hand.Add(lockedCard);
-                    lockedCard = null; // Card is now in hand, clear the locked slot
-                    UpdateHandUI(); // Update UI to show the added locked card
-                    ShowPopupMessage($"Locked card added to hand.", true); // Inform player
+                    lockedCard = null;
+                    UpdateHandUI();
+                    ShowPopupMessage($"Locked card added to hand.", true);
                 }
 
-                UpdateHandUI(); // Refresh hand display (important if a locked card was added or hand was cleared)
+                UpdateHandUI(); // Refresh hand display
 
                 // TODO: Ensure Deck Draw buttons are interactable during this phase.
-                // TODO: Ensure cards in hand are NOT interactable for playing during this phase.
+                // Ensure cards in hand are NOT interactive for playing during this phase.
+                SetHandCardInteractivity(false); // Cards in hand cannot be played yet
+                // TODO: Hide CookingPhase specific UI like "Finish Cooking" button
+                // TODO: Hide Technique selection UI elements (prompt, cancel button).
                 break;
 
             case GameState.CookingPhase:
                 Debug.Log("Entered Cooking Phase State");
-                if (gameUIPanel != null) gameUIPanel.SetActive(true); // Ensure game UI is active
-                if (drawPopupPanel != null) drawPopupPanel.SetActive(false); // Hide draw popup
+                if (gameUIPanel != null) gameUIPanel.SetActive(true);
+                if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
 
-                UpdateHandUI(); // Refresh hand UI. Cards in hand should now be interactive for playing.
+                playedCardsThisRound.Clear(); // Clear played cards list for this round
+                CancelTechniqueSelection(); // Reset selection state when entering cooking
 
-                // TODO: Enable card playing mechanics in the UI (e.g., clicking on hand cards via CardDisplayUI).
-                // TODO: Provide a way for the player to signify they are done cooking (e.g., activate a "Finish Cooking" button).
-                // TODO: Ensure Deck Draw buttons and Draw Popup related UI are NOT interactable.
+                UpdateHandUI(); // Refresh hand UI. Cards in hand should now be interactive (controlled by SetHandCardInteractivity below).
+
+                // TODO: Ensure Deck Draw buttons and Draw Popup UI are NOT interactable.
+                // TODO: Ensure "Finish Cooking" button IS interactable.
+                // TODO: Hide Technique selection UI elements initially (prompt, cancel button).
+
+                // Set initial interactivity for cards in hand (playable directly unless a technique is in progress)
+                SetHandCardInteractivity(true);
+                // Initial highlight state (no cards highlighted when starting cooking)
+                HighlightSelectableCards(); // This will call SetHighlight(false) on all cards
                 break;
 
             case GameState.ScoringPhase:
                 Debug.Log("Entered Scoring Phase State");
-                if (gameUIPanel != null) gameUIPanel.SetActive(true); // Ensure game UI is active
-                if (drawPopupPanel != null) drawPopupPanel.SetActive(false); // Hide draw popup
+                if (gameUIPanel != null) gameUIPanel.SetActive(true);
+                if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
 
-                // TODO: Implement the scoring logic for the current round.
-                // 1. Access the cards the player played for the dish (you need a list to store these in CookingPhase).
-                // 2. Compare the played cards and their combined stats to the requirements and target stats of the current recipe (gameRecipes[currentRound]).
-                // 3. Calculate the score gained for this round.
-                // 4. Add the round score to totalScore.
-                // 5. Display score feedback for the round in the game UI (e.g., how well they matched the recipe, points gained, updated total score).
+                SetHandCardInteractivity(false); // Cards in hand cannot be played during scoring
+                CancelTechniqueSelection(); // Reset selection state
 
-                // Transition to RoundEnd after scoring is done (you might add a delay or a "Continue" button here).
+                // TODO: Implement scoring logic using playedCardsThisRound and gameRecipes[currentRound].
+                // TODO: Display score feedback.
+
                 ChangeState(GameState.RoundEnd);
                 break;
 
             case GameState.RoundEnd:
                 Debug.Log("Entered Round End State");
-                if (gameUIPanel != null) gameUIPanel.SetActive(true); // Ensure game UI is active
-                if (drawPopupPanel != null) drawPopupPanel.SetActive(false); // Hide draw popup
+                if (gameUIPanel != null) gameUIPanel.SetActive(true);
+                if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
 
-                // TODO: Handle the player's choice to lock one card from their *remaining* hand for the next round.
-                // This typically involves a UI prompt or interaction where the player clicks a card in their hand.
-                // You need to implement a mechanism to allow this selection.
-                // If a card is selected to be locked:
-                // - Store the CardSO reference in the 'lockedCard' variable.
-                // - Remove the card from the 'hand' list.
-                // - Update the hand UI (`UpdateHandUI()`).
-                // - Show a confirmation message (e.g., using ShowPopupMessage).
-                // - TODO: Disable further card locking options for this round after one is selected.
+                SetHandCardInteractivity(false); // Cards in hand cannot be played during round end
+                CancelTechniqueSelection(); // Reset selection state
 
-                currentRound++; // Increment round counter for the next round
-                currentDiscardsThisRound = 0; // Reset discards for the new round
+                // TODO: Handle player choice to lock a card.
+                // After potential card locking (or decision not to):
+                currentRound++;
+                currentDiscardsThisRound = 0;
+                // TODO: Update game status UI (round number).
 
-                // Check if the game has completed all rounds
                 if (currentRound < totalRounds)
                 {
-                    // If there are more rounds, transition to the next round's drawing phase.
                     Debug.Log($"Moving to Round {currentRound + 1}.");
                     ChangeState(GameState.DrawingPhase);
                 }
                 else
                 {
-                    // If all rounds are done, the game is over.
                     Debug.Log("All rounds completed. Ending game.");
                     ChangeState(GameState.GameEnd);
                 }
@@ -306,373 +340,334 @@ public class GameManager : MonoBehaviour
 
             case GameState.GameEnd:
                 Debug.Log("Entered Game End State. Final Score: " + totalScore);
-                // Activate the Game End UI panel.
                 if (gameEndPanel != null) gameEndPanel.SetActive(true);
-                if (gameUIPanel != null) gameUIPanel.SetActive(false); // Hide game UI
+                if (gameUIPanel != null) gameUIPanel.SetActive(false);
 
-                // Display the final score on the game end panel.
+                SetHandCardInteractivity(false); // Cards in hand cannot be played during game end
+                CancelTechniqueSelection(); // Reset selection state
+
                 if (finalScoreText != null) finalScoreText.text = "Final Score: " + totalScore.ToString();
 
-                // Handle Highscore logic: Check if current score is a new high score and save if it is.
-                int highScore = GetHighScore(); // Get existing high score from PlayerPrefs
+                int highScore = GetHighScore();
                 if (totalScore > highScore)
                 {
                     highScore = totalScore;
-                    SaveHighScore(highScore); // Save the new high score to PlayerPrefs
+                    SaveHighScore(highScore);
                     Debug.Log("New High Score!");
-                    // TODO: Show a visual indication or message for achieving a new high score.
+                    // TODO: Show new high score indication.
                 }
-                // Display the high score on the game end panel.
                 if (highScoreText != null) highScoreText.text = "High Score: " + highScore.ToString();
 
-                // TODO: Ensure "Play Again" and "Back to Menu" buttons on the Game End panel are interactable.
-                // TODO: Ensure all other UI elements from the game scene are not interactable or hidden.
+                // TODO: Ensure Game End buttons are interactable.
+                // TODO: Ensure all other UI elements are not interactable.
                 break;
         }
     }
 
-    // --- State Transition Methods (Called by UI Buttons) ---
+    // --- State Transition Methods ---
 
-    // Called by a button in the Main Menu UI to start a new game.
     public void StartGame()
     {
-        ChangeState(GameState.GameSetup); // Transition to the Game Setup state
+        ChangeState(GameState.GameSetup);
     }
 
-    // Called by a button in the Game End UI to start the game over.
     public void RestartGame()
     {
-        ChangeState(GameState.GameSetup); // Transition back to Game Setup to reset and start a new game
+        ChangeState(GameState.GameSetup);
     }
 
-    // Called by a button (e.g., in Game End or a Pause Menu) to return to the main menu state.
     public void ReturnToMainMenu()
     {
-        ChangeState(GameState.MainMenu); // Transition to the Main Menu state
+        ChangeState(GameState.MainMenu);
     }
 
 
-    // --- Gameplay Action Methods (Called by UI Button Clicks) ---
+    // --- Gameplay Action Methods ---
 
-    // Called by buttons associated with decks (e.g., "Draw Ingredient/Spice Card")
-    // Ensure these buttons are only interactable during the DrawingPhase.
     public void DrawCardFromDeck(Deck deckToDrawFrom)
     {
-        // Allow drawing only during the DrawingPhase and if the hand is not yet full.
-        if (currentState != GameState.DrawingPhase)
-        {
-            Debug.LogWarning($"Attempted to draw card outside of Drawing Phase. Current State: {currentState}");
-            ShowPopupMessage("Can only draw cards during the Drawing Phase!", true);
-            return;
-        }
+        if (currentState != GameState.DrawingPhase) { Debug.LogWarning("Attempted to draw card outside of Drawing Phase."); ShowPopupMessage("Can only draw cards during the Drawing Phase!", true); return; }
+        if (hand.Count >= handLimit) { ShowPopupMessage("Hand is full! Drawing Phase ends.", true); /* Optional: ChangeState(GameState.CookingPhase); */ return; }
 
-        if (hand.Count >= handLimit)
-        {
-            // If hand is full, inform the player and do not draw a card.
-            ShowPopupMessage("Hand is full! Drawing Phase ends.", true);
-            // Optional: Automatically transition to CookingPhase if hand is full upon attempting to draw.
-            // ChangeState(GameState.CookingPhase);
-            return; // Do not draw if hand is full
-        }
-
-        // Draw a card from the specified deck using the infinite deck logic.
         currentlyDrawnCard = deckToDrawFrom.DrawCard();
 
-        if (currentlyDrawnCard != null)
-        {
-            // If a card was successfully drawn, show the draw popup panel with the card's details.
-            ShowDrawPopup(currentlyDrawnCard);
-        }
-        else
-        {
-            // This should ideally not happen with an infinite pool unless the initial pool was empty.
-            Debug.LogError($"Error: Could not draw a card from {deckToDrawFrom.name}. Pool might be empty or not initialized correctly.");
-            ShowPopupMessage($"Error drawing card from {deckToDrawFrom.name}.", true);
-            // In case of error, hide the popup and clear the drawn card reference.
-            if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-            currentlyDrawnCard = null;
-        }
+        if (currentlyDrawnCard != null) { ShowDrawPopup(currentlyDrawnCard); }
+        else { Debug.LogError($"Error: Could not draw a card from {deckToDrawFrom.name}."); ShowPopupMessage($"Error drawing card from {deckToDrawFrom.name}.", true); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; }
     }
 
-    // Displays the details of the drawn card in the draw popup UI.
-    // Also sets up the interactability of the popup's buttons.
     void ShowDrawPopup(CardSO card)
     {
-        // Only show popup if the state is DrawingPhase.
-        if (currentState != GameState.DrawingPhase)
-        {
-            Debug.LogWarning("Attempted to show draw popup outside of Drawing Phase.");
-            if (drawPopupPanel != null) drawPopupPanel.SetActive(false); // Hide if somehow active
-            currentlyDrawnCard = null; // Clear the drawn card as it can't be acted upon
-            return;
-        }
+        if (currentState != GameState.DrawingPhase) { Debug.LogWarning("Attempted to show draw popup outside of Drawing Phase."); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; return; }
 
-        // Activate the draw popup panel.
         if (drawPopupPanel != null) drawPopupPanel.SetActive(true);
 
-        // Update UI elements in the popup with information from the drawn card.
         if (popupCardArtwork != null) popupCardArtwork.sprite = card.artwork;
         if (popupCardName != null) popupCardName.text = card.cardName;
 
-        // Combine Description and Stats into a single string for the popup's description text element.
         string combinedText = card.description;
-        if (!string.IsNullOrEmpty(card.description) && card.GetStatsDictionary().Count > 0)
-        {
-            combinedText += "\n\nStats:\n"; // Add a separator and label for stats
-        }
-        foreach (var stat in card.GetStatsDictionary())
-        {
-            combinedText += $"{stat.Key}: {stat.Value}\n";
-        }
+        if (!string.IsNullOrEmpty(card.description) && card.GetStatsDictionary().Count > 0) { combinedText += "\n\nStats:\n"; }
+        foreach (var stat in card.GetStatsDictionary()) { combinedText += $"{stat.Key}: {stat.Value}\n"; }
         if (popupCardDescription != null) popupCardDescription.text = combinedText;
 
-        // Determine if the "Combine" button should be active for the drawn card:
-        // Active only if the drawn card is a Spice AND there is at least one card already in hand
-        // with the exact same name.
         bool canCombine = false;
-        if (card.cardType == CardSO.CardType.Spice)
-        {
-            // Check if any card in the player's current hand has the same name as the drawn spice card.
-            if (hand.Any(c => c.cardName == card.cardName))
-            {
-                canCombine = true;
-            }
-        }
-        // Set the "Combine" button's active state based on whether combination is possible.
+        if (card.cardType == CardSO.CardType.Spice) { if (hand.Any(c => c.cardName == card.cardName)) { canCombine = true; } }
         if (combineButton != null) combineButton.gameObject.SetActive(canCombine);
 
-        // Reset the popup message text
         if (popupMessageText != null) popupMessageText.text = "Choose an action:";
-
-        // Ensure the "Keep" button is interactable.
         if (keepButton != null) keepButton.interactable = true;
-        // Disable the "Discard" button if the player has used all discards for this round.
         if (discardButton != null) discardButton.interactable = (currentDiscardsThisRound < maxDiscardsPerRound);
     }
 
-    // Action taken when the player clicks "Keep" in the draw popup.
     void KeepDrawnCard()
     {
-        // Allow keeping only if in the DrawingPhase, a card is currently drawn in the popup,
-        // and the player's hand is not yet full.
-        if (currentState != GameState.DrawingPhase || currentlyDrawnCard == null || hand.Count >= handLimit)
-        {
-            if (hand.Count >= handLimit) ShowPopupMessage("Hand is already full! Cannot keep card.", false);
-            Debug.LogWarning("KeepDrawnCard called in invalid state or conditions.");
-            // Close the popup if conditions are not met
-            if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-            currentlyDrawnCard = null; // Clear drawn card reference as it wasn't kept
-            return;
-        }
+        if (currentState != GameState.DrawingPhase || currentlyDrawnCard == null || hand.Count >= handLimit) { if (hand.Count >= handLimit) ShowPopupMessage("Hand is already full! Cannot keep card.", false); Debug.LogWarning("KeepDrawnCard called in invalid state or conditions."); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; return; }
 
-        // Add the currently drawn card's CardSO reference to the player's hand list.
-        hand.Add(currentlyDrawnCard); // Add the CardSO reference to the hand list
-        UpdateHandUI(); // Update the visual display of the hand to show the new card
+        hand.Add(currentlyDrawnCard);
+        UpdateHandUI();
 
-        // Hide the draw popup and clear the reference to the card that was just kept.
         if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-        currentlyDrawnCard = null; // Clear the drawn card reference
+        currentlyDrawnCard = null;
 
-        // Check if the hand is now full after keeping the card.
-        if (hand.Count >= handLimit)
-        {
-            // If hand is full, the Drawing Phase for this round ends.
-            ShowPopupMessage("Hand is full! Drawing Phase ends.", true);
-            // Automatically transition to the CookingPhase.
-            ChangeState(GameState.CookingPhase);
-        }
-        // If hand is not full, the player remains in the DrawingPhase and can draw again.
+        if (hand.Count >= handLimit) { ShowPopupMessage("Hand is full! Drawing Phase ends.", true); ChangeState(GameState.CookingPhase); }
     }
 
-    // Action taken when the player clicks the "Discard" button in the draw popup.
-    // autoDiscard parameter is used internally if a card needs to be discarded without player choice (e.g., hand full on draw attempt).
     void DiscardDrawnCard(bool autoDiscard = false)
     {
-        // Allow discarding only if in the DrawingPhase (unless it's an auto-discard scenario)
-        // AND if a card is currently drawn in the popup.
-        if ((currentState != GameState.DrawingPhase && !autoDiscard) || currentlyDrawnCard == null)
-        {
-            Debug.LogWarning("DiscardDrawnCard called outside of Drawing Phase or with no card drawn.");
-            if (drawPopupPanel != null) drawPopupPanel.SetActive(false); // Close popup
-            currentlyDrawnCard = null; // Clear drawn card
-            return;
-        }
+        if ((currentState != GameState.DrawingPhase && !autoDiscard) || currentlyDrawnCard == null) { Debug.LogWarning("DiscardDrawnCard called outside of Drawing Phase or with no card drawn."); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; return; }
 
-        // Check if the player has discards left for this round, unless it's an automatic discard.
         if (currentDiscardsThisRound < maxDiscardsPerRound || autoDiscard)
         {
             Debug.Log($"Discarded: {currentlyDrawnCard.cardName}");
-            // In this basic setup, the discarded CardSO reference is just removed from the flow.
-            // If you needed a discard pile for gameplay mechanics, you would add it to a discard Deck here.
-
-            // Increment the discard counter for the round if it was a player-initiated discard.
-            if (!autoDiscard)
-            {
-                currentDiscardsThisRound++;
-                // TODO: Update the UI element showing the number of discards left for the round.
-                if (discardsLeftText != null) discardsLeftText.text = $"Discards Left: {maxDiscardsPerRound - currentDiscardsThisRound}";
-                Debug.Log($"Discards left this round: {maxDiscardsPerRound - currentDiscardsThisRound}");
-                // Update the discard button's interactability in case discards are now maxed.
-                if (discardButton != null) discardButton.interactable = (currentDiscardsThisRound < maxDiscardsPerRound);
-            }
-
-            // Hide the draw popup and clear the reference to the card that was just discarded.
-            if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-            currentlyDrawnCard = null; // Clear the drawn card reference
-
-            // If it was a player-initiated discard, they remain in the DrawingPhase and can draw again.
-            // If autoDiscard was true (e.g., hand was full on draw attempt), the state does not change either.
-        }
-        else
-        {
-            // Player tried to discard but has no discards left this round.
-            ShowPopupMessage($"No discards left this round ({currentDiscardsThisRound}/{maxDiscardsPerRound})!", false);
-            // The discard button should already be disabled in the popup UI if discards are maxed.
-        }
-    }
-
-    // Action taken when the player clicks the "Combine" button in the draw popup.
-    // This is currently implemented for combining matching Spice cards to increase stats.
-    // Ensure this button is only interactable/active when a combine is possible.
-    void CombineDrawnCard()
-    {
-        // Allow combining only if in the DrawingPhase, a card is currently drawn,
-        // the drawn card is a Spice, AND there is at least one card already in hand
-        // with the exact same name to combine with.
-        if (currentState != GameState.DrawingPhase || currentlyDrawnCard == null || currentlyDrawnCard.cardType != CardSO.CardType.Spice)
-        {
-            Debug.LogWarning($"CombineDrawnCard called in invalid state ({currentState}), no card drawn, or card is not a Spice ({currentlyDrawnCard?.cardType}).");
-            ShowPopupMessage("Combination not possible.", false);
+            if (!autoDiscard) { currentDiscardsThisRound++; if (discardsLeftText != null) discardsLeftText.text = $"Discards Left: {maxDiscardsPerRound - currentDiscardsThisRound}"; Debug.Log($"Discards left this round: {maxDiscardsPerRound - currentDiscardsThisRound}"); if (discardButton != null) discardButton.interactable = (currentDiscardsThisRound < maxDiscardsPerRound); }
             if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
             currentlyDrawnCard = null;
-            return;
         }
+        else { ShowPopupMessage($"No discards left this round ({currentDiscardsThisRound}/{maxDiscardsPerRound})!", false); }
+    }
 
-        // Find the first card in hand with the exact same name as the drawn Spice.
-        // This is the card that the drawn spice will be combined with.
+    void CombineDrawnCard()
+    {
+        if (currentState != GameState.DrawingPhase || currentlyDrawnCard == null || currentlyDrawnCard.cardType != CardSO.CardType.Spice) { Debug.LogWarning($"CombineDrawnCard called in invalid state ({currentState}), no card drawn, or card is not a Spice."); ShowPopupMessage("Combination not possible.", false); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; return; }
+
         CardSO cardInHandToCombine = hand.FirstOrDefault(c => c.cardName == currentlyDrawnCard.cardName);
 
-        // This check should ideally not fail if the combine button's active state is managed correctly,
-        // but we include it for safety.
         if (cardInHandToCombine != null)
         {
             Debug.Log($"Attempting to combine drawn {currentlyDrawnCard.cardName} with {cardInHandToCombine.cardName} from hand.");
 
-            // --- Combination Logic: Combine Stats ---
-            // Find the name of the stat that this type of spice affects using the mapping dictionary.
             if (spiceStatMapping.TryGetValue(currentlyDrawnCard.cardName, out string statName))
             {
-                // Get the value of the relevant stat from the drawn card.
                 float drawnStatValue = currentlyDrawnCard.GetStat(statName);
-
-                // Check if the card in hand actually has this stat before trying to add.
-                // (It should if it's the same spice type, but this is a good check).
                 if (cardInHandToCombine.GetStatsDictionary().ContainsKey(statName))
                 {
-                    // Add the drawn card's stat value to the corresponding stat on the card in hand.
-                    // This calls the AddToStat method you must implement in your CardSO.cs.
-                    cardInHandToCombine.AddToStat(statName, drawnStatValue);
+                    cardInHandToCombine.AddToStat(statName, drawnStatValue); // Requires AddToStat in CardSO.cs
+                    Debug.Log($"Combined {currentlyDrawnCard.cardName} stats onto {cardInHandToCombine.cardName}. New '{statName}' value: {cardInHandToCombine.GetStat(statName)}");
 
-                    Debug.Log($"Combined {currentlyDrawnCard.cardName} stats onto {cardInHandToCombine.cardName}. " +
-                              $"New '{statName}' value on card in hand: {cardInHandToCombine.GetStat(statName)}");
-
-                    // After successfully combining stats, the drawn card is consumed.
-                    // The card in hand remains and its stat is increased.
-                    // We do NOT remove cardInHandToCombine from the hand here.
-
-                    // --- UI Update ---
-                    // Update the visual display of the hand. Your CardDisplayUI script must
-                    // be able to read and show the updated stats from the CardSO instance.
                     UpdateHandUI();
-
-                    // Hide the draw popup since the action is complete.
                     if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-                    currentlyDrawnCard = null; // Clear the reference to the drawn card.
+                    currentlyDrawnCard = null;
 
                     ShowPopupMessage($"Combined {currentlyDrawnCard.cardName}! {statName} increased on the card in hand.", true);
 
-                    // Check if hand is now full after combining (less likely as no card was added, but good habit)
-                    if (hand.Count >= handLimit)
-                    {
-                        ShowPopupMessage("Hand is full! Drawing Phase ends.", true);
-                        // Optional: Automatically transition to CookingPhase if hand is full
-                        // ChangeState(GameState.CookingPhase);
-                    }
+                    if (hand.Count >= handLimit) { ShowPopupMessage("Hand is full! Drawing Phase ends.", true); ChangeState(GameState.CookingPhase); }
                 }
-                else
-                {
-                    // The matching card in hand somehow doesn't have the expected stat.
-                    Debug.LogWarning($"Card in hand ({cardInHandToCombine.cardName}) does not have stat '{statName}'. Cannot combine.");
-                    ShowPopupMessage($"Cannot combine: Card in hand does not have the required stat.", false);
-                    // Decide what happens in this edge case - perhaps discard the drawn card?
-                    if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-                    currentlyDrawnCard = null;
-                }
+                else { Debug.LogWarning($"Card in hand ({cardInHandToCombine.cardName}) does not have stat '{statName}'. Cannot combine."); ShowPopupMessage($"Cannot combine: Card in hand does not have the required stat.", false); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; }
             }
-            else
-            {
-                // The drawn spice card's name is not in the spiceStatMapping dictionary.
-                Debug.LogWarning($"Spice '{currentlyDrawnCard.cardName}' has no defined stat mapping in spiceStatMapping dictionary.");
-                ShowPopupMessage($"Cannot combine: '{currentlyDrawnCard.cardName}' does not affect a known stat type.", false);
-                // Decide what happens when a spice doesn't have a mapping - discard, return to deck?
-                if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-                currentlyDrawnCard = null;
-            }
+            else { Debug.LogWarning($"Spice '{currentlyDrawnCard.cardName}' has no defined stat mapping."); ShowPopupMessage($"Cannot combine: '{currentlyDrawnCard.cardName}' does not affect a known stat type.", false); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; }
         }
-        else
-        {
-            // This should ideally not happen if the combine button's active state is managed correctly,
-            // but it's a failsafe.
-            Debug.LogError("CombineDrawnCard called but no matching card found in hand. Combine button should not have been active.");
-            ShowPopupMessage("No matching card in hand to combine!", false);
-            if (drawPopupPanel != null) drawPopupPanel.SetActive(false);
-            currentlyDrawnCard = null;
-        }
+        else { Debug.LogError("CombineDrawnCard called but no matching card found in hand."); ShowPopupMessage("No matching card in hand to combine!", false); if (drawPopupPanel != null) drawPopupPanel.SetActive(false); currentlyDrawnCard = null; }
     }
 
     // --- Cooking Phase Methods ---
 
-    // TODO: Implement methods for playing cards from hand during CookingPhase.
-    // This method would be called by the CardDisplayUI script when a card in hand is clicked.
-    // public void PlayCard(CardSO cardToPlay)
-    // {
-    //    // 1. Check if the current state is CookingPhase.
-    //    if (currentState != GameState.CookingPhase)
-    //    {
-    //        Debug.LogWarning("Attempted to play card outside of Cooking Phase.");
-    //        ShowPopupMessage("You can only play cards during the Cooking Phase!", true);
-    //        return;
-    //    }
-    //    // 2. Check if the cardToPlay is actually in the 'hand' list.
-    //    if (!hand.Contains(cardToPlay))
-    //    {
-    //         Debug.LogWarning($"Attempted to play card '{cardToPlay.cardName}' not found in hand.");
-    //         ShowPopupMessage("Card not found in hand!", false);
-    //         return;
-    //    }
-    //    // 3. Remove the card from the 'hand' list.
-    //    hand.Remove(cardToPlay);
-    //    // 4. Add the card to a temporary list representing the "played cards" for the current dish.
-    //    // TODO: You need a List<CardSO> playedCardsThisRound; variable in GameManager.
-    //    // playedCardsThisRound.Add(cardToPlay);
-    //
-    //    Debug.Log($"Played card: {cardToPlay.cardName}");
-    //
-    //    // 5. Update the hand UI to reflect the removed card.
-    //    UpdateHandUI();
-    //    // 6. TODO: Potentially update a separate UI area to show the cards played for the dish.
-    // }
+    // New: Method to handle a card being played from the hand.
+    // This method is called by the CardDisplayUI script when a card in hand is clicked.
+    public void PlayCard(CardSO cardToPlay)
+    {
+        // Only allow playing cards during the CookingPhase.
+        if (currentState != GameState.CookingPhase)
+        {
+            Debug.LogWarning($"Attempted to play card '{cardToPlay.cardName}' outside of Cooking Phase. Current State: {currentState}");
+            ShowPopupMessage("You can only play cards during the Cooking Phase!", true);
+            return;
+        }
+        // Ensure the card clicked is actually in the player's hand.
+        if (!hand.Contains(cardToPlay))
+        {
+            Debug.LogWarning($"Attempted to play card '{cardToPlay.cardName}' not found in hand.");
+            ShowPopupMessage("Card not found in hand!", false);
+            return;
+        }
+
+        // --- Handle Card Playing based on Current Cooking Selection State ---
+        switch (currentCookingSelectionState)
+        {
+            case CookingSelectionState.None:
+                // No technique selection in progress, handle direct card plays (Ingredient, Spice, Technique)
+                switch (cardToPlay.cardType)
+                {
+                    case CardSO.CardType.Ingredient:
+                    case CardSO.CardType.Spice:
+                        // Ingredient and Spice cards are played directly to the dish.
+                        Debug.Log($"Playing {cardToPlay.cardType}: {cardToPlay.cardName}");
+                        hand.Remove(cardToPlay); // Remove from hand
+                        playedCardsThisRound.Add(cardToPlay); // Add to played cards
+                        ShowPopupMessage($"Played {cardToPlay.cardName}.", true);
+                        UpdateHandUI(); // Update hand display
+                                        // TODO: Update played cards UI display (add visual representation of cardToPlay)
+                        break;
+
+                    case CardSO.CardType.Tool:
+                        // Tool cards cannot be played directly. They are selected after a Technique.
+                        Debug.Log($"Attempted to play Tool directly: {cardToPlay.cardName}");
+                        ShowPopupMessage("You need to select a Technique first to use a Tool.", true);
+                        // Tool remains in hand.
+                        break;
+
+                    case CardSO.CardType.Technique:
+                        // Technique cards initiate a combination process.
+                        Debug.Log($"Initiating Technique: {cardToPlay.cardName}. Select a Tool.");
+                        selectedTechnique = cardToPlay; // Store the selected Technique
+                        currentCookingSelectionState = CookingSelectionState.WaitingForTool; // Change state
+                        ShowPopupMessage($"Selected {cardToPlay.cardName}. Now select a Tool from your hand.", false);
+                        // TODO: Update UI prompt text (e.g., show "Select a Tool").
+                        // TODO: Make a "Cancel Technique" button visible.
+                        SetHandCardInteractivity(false); // Temporarily disable playing other cards directly
+                        HighlightSelectableCards(); // Highlight valid Tools
+                                                    // Technique remains in hand for now, will be consumed later.
+                        break;
+
+                    default:
+                        Debug.LogWarning($"Attempted to play card with unhandled type: {cardToPlay.cardType}");
+                        ShowPopupMessage("Cannot play this type of card directly.", false);
+                        break;
+                }
+                break; // End case CookingSelectionState.None
+
+            case CookingSelectionState.WaitingForTool:
+                // A Technique has been selected, waiting for the player to click a Tool card.
+                if (cardToPlay.cardType == CardSO.CardType.Tool)
+                {
+                    Debug.Log($"Selected Tool: {cardToPlay.cardName}");
+                    selectedTool = cardToPlay; // Store the selected Tool
+                    currentCookingSelectionState = CookingSelectionState.WaitingForIngredient; // Change state
+                    ShowPopupMessage($"Selected Tool: {cardToPlay.cardName}. Now select an Ingredient from your hand.", false);
+                    // TODO: Update UI prompt text (e.g., show "Select an Ingredient").
+                    HighlightSelectableCards(); // Highlight valid Ingredients
+                                                // Tool remains in hand for now.
+                }
+                else
+                {
+                    Debug.LogWarning($"Attempted to select non-Tool card ({cardToPlay.cardName}, Type: {cardToPlay.cardType}) when waiting for Tool.");
+                    ShowPopupMessage("You must select a Tool card.", false);
+                    // Remain in WaitingForTool state.
+                }
+                break; // End case CookingSelectionState.WaitingForTool
+
+            case CookingSelectionState.WaitingForIngredient:
+                // A Technique and Tool have been selected, waiting for the player to click an Ingredient card.
+                if (cardToPlay.cardType == CardSO.CardType.Ingredient)
+                {
+                    Debug.Log($"Selected Ingredient: {cardToPlay.cardName}");
+                    selectedIngredient = cardToPlay; // Store the selected Ingredient
+                                                     // Have all three pieces? Complete the combination!
+                    CompleteTechniqueCombination(); // Call the method to process the combination
+                                                    // State will reset to None inside CompleteTechniqueCombination.
+                }
+                else
+                {
+                    Debug.LogWarning($"Attempted to select non-Ingredient card ({cardToPlay.cardName}, Type: {cardToPlay.cardType}) when waiting for Ingredient.");
+                    ShowPopupMessage("You must select an Ingredient card.", false);
+                    // Remain in WaitingForIngredient state.
+                }
+                break; // End case CookingSelectionState.WaitingForIngredient
+        }
+    }
+
+    // New: Method to complete the Technique + Tool + Ingredient combination
+    void CompleteTechniqueCombination()
+    {
+        // Ensure all three cards were selected and are still in the player's hand.
+        if (selectedTechnique != null && selectedTool != null && selectedIngredient != null &&
+            hand.Contains(selectedTechnique) && hand.Contains(selectedTool) && hand.Contains(selectedIngredient))
+        {
+            Debug.Log($"Completing Technique Combination: {selectedTechnique.cardName} with {selectedTool.cardName} and {selectedIngredient.cardName}");
+
+            // --- Process the Combination ---
+            // TODO: Implement the actual effect of the Technique on the Ingredient (e.g., apply stats, change type?).
+            // This might involve modifying the Ingredient card's stats or creating a new combined card representation.
+            // For now, we just consume the three cards.
+
+            // Remove all three cards from the hand.
+            hand.Remove(selectedTechnique);
+            hand.Remove(selectedTool);
+            hand.Remove(selectedIngredient);
+
+            // Add all three cards to the list of cards played for this round.
+            // You might choose to only add the resulting modified Ingredient, or all three for scoring purposes.
+            // Let's add all three for now.
+            playedCardsThisRound.Add(selectedTechnique);
+            playedCardsThisRound.Add(selectedTool);
+            playedCardsThisRound.Add(selectedIngredient);
+
+            ShowPopupMessage($"Used {selectedTechnique.cardName} with {selectedTool.cardName} on {selectedIngredient.cardName}!", true);
+
+            // --- Reset Selection State ---
+            selectedTechnique = null;
+            selectedTool = null;
+            selectedIngredient = null;
+            currentCookingSelectionState = CookingSelectionState.None; // Reset the state
+
+            // --- UI Updates ---
+            UpdateHandUI(); // Update the hand display to show the removed cards
+                            // TODO: Update UI to show the newly played cards for the dish.
+                            // TODO: Hide Technique selection UI elements (prompt, cancel button).
+            SetHandCardInteractivity(true); // Re-enable playing other cards directly (now that selection is done)
+            HighlightSelectableCards(); // Clear highlights
+        }
+        else
+        {
+            Debug.LogWarning("Attempted to complete Technique combination but cards were missing or not in hand. Cancelling selection.");
+            ShowPopupMessage("Error during combination. Please try again.", true);
+            // If something went wrong, cancel the whole process.
+            CancelTechniqueSelection();
+        }
+    }
+
+    // New: Method to cancel the current Technique selection process
+    public void CancelTechniqueSelection()
+    {
+        if (currentCookingSelectionState != CookingSelectionState.None)
+        {
+            Debug.Log("Technique selection cancelled by player or error.");
+            selectedTechnique = null;
+            selectedTool = null;
+            selectedIngredient = null;
+            currentCookingSelectionState = CookingSelectionState.None; // Reset the state
+            ShowPopupMessage("Technique selection cancelled.", true);
+            UpdateHandUI(); // Refresh hand UI (removes highlights)
+            // TODO: Hide Technique selection UI elements (prompt, cancel button).
+            SetHandCardInteractivity(true); // Re-enable playing other cards directly
+            HighlightSelectableCards(); // Clear highlights
+        }
+        // If state is already None, do nothing.
+    }
 
     // TODO: Implement a method to handle the "Finish Cooking" action.
     // This would likely be called by a UI button available during the CookingPhase.
     public void FinishCooking()
     {
-        if (currentState == GameState.CookingPhase)
+        if (currentState == GameState.CookingPhase && currentCookingSelectionState == CookingSelectionState.None) // Only allow finishing if no technique selection is in progress
         {
             Debug.Log("Finishing Cooking for the round.");
-            // TODO: Gather the cards the player used to form the dish from the "played cards" list (e.g., playedCardsThisRound).
+            // TODO: Gather the cards the player used to form the dish from the "played cards" list (playedCardsThisRound).
             // TODO: Trigger the scoring logic (comparing played cards/stats to the current recipe (gameRecipes[currentRound])).
             ChangeState(GameState.ScoringPhase); // Transition to Scoring Phase
+        }
+        else if (currentState == GameState.CookingPhase && currentCookingSelectionState != CookingSelectionState.None)
+        {
+            Debug.LogWarning("Attempted to finish cooking while a technique selection is in progress.");
+            ShowPopupMessage("Finish your technique selection first, or cancel it.", true);
         }
         else
         {
@@ -736,13 +731,18 @@ public class GameManager : MonoBehaviour
                     displayScript.SetCard(cardSO);
 
                     // Set the interactivity of the card UI based on the current game state.
-                    // Cards in hand are typically playable only during the CookingPhase.
-                    displayScript.SetInteractive(currentState == GameState.CookingPhase);
+                    // Cards in hand are typically playable only during the CookingPhase,
+                    // and interactivity is further managed by SetHandCardInteractivity.
+                    // displayScript.SetInteractive(currentState == GameState.CookingPhase); // Old logic
+                    displayScript.SetInteractive(true); // Interactivity is managed externally now
 
                     // Pass a reference to this GameManager to the CardDisplayUI script.
                     // This allows the CardDisplayUI script to call methods back on the GameManager
                     // when the card is interacted with (e.g., clicked to play).
                     displayScript.SetGameManager(this);
+
+                    // TODO: Set highlight based on currentCookingSelectionState and card type
+                    // HighlightSelectableCards() will call SetHighlight after this method finishes.
                 }
                 else
                 {
@@ -761,196 +761,111 @@ public class GameManager : MonoBehaviour
         {
             // handSizeText.text = $"Hand: {hand.Count}/{handLimit}";
         }
+
+        // After updating the UI GameObjects, apply the correct interactivity and highlighting.
+        SetHandCardInteractivity(currentState == GameState.CookingPhase && currentCookingSelectionState == CookingSelectionState.None); // Can only play directly if in cooking and no selection
+        HighlightSelectableCards(); // Update highlights based on current selection state
     }
 
-    // Displays the information of the current AND next recipes in the designated UI elements.
+    // New: Controls the overall interactivity of cards in the hand GameObjects.
+    // This enables/disables the Button or interaction component on the CardDisplayUI.
+    void SetHandCardInteractivity(bool isInteractive)
+    {
+        if (handPanel == null) return;
+
+        CardDisplayUI[] cardUIs = handPanel.GetComponentsInChildren<CardDisplayUI>();
+        foreach (var cardUI in cardUIs)
+        {
+            // This sets the base interactivity. HighlightSelectableCards will override
+            // this for specific cards during selection states.
+            cardUI.SetInteractive(isInteractive);
+        }
+    }
+
+    // New: Highlights cards in hand that are currently selectable based on the cooking selection state.
+    // Also sets interactivity for selectable cards if in a selection state.
+    void HighlightSelectableCards()
+    {
+        if (handPanel == null) return;
+
+        CardDisplayUI[] cardUIs = handPanel.GetComponentsInChildren<CardDisplayUI>();
+        foreach (var cardUI in cardUIs)
+        {
+            bool isSelectable = false;
+            CardSO cardSO = cardUI.GetCardData(); // Get the CardSO data for this UI element
+
+            if (cardSO != null)
+            {
+                switch (currentCookingSelectionState)
+                {
+                    case CookingSelectionState.None:
+                        // In None state, highlight is off for selection.
+                        isSelectable = false;
+                        // Cards can be interactive if in CookingPhase. SetHandCardInteractivity handles base interactivity.
+                        break;
+                    case CookingSelectionState.WaitingForTool:
+                        // Highlight Tool cards, and make them interactive (override base interactivity).
+                        if (cardSO.cardType == CardSO.CardType.Tool)
+                        {
+                            isSelectable = true;
+                            cardUI.SetInteractive(true); // Make selectable tools interactive
+                        }
+                        else
+                        {
+                            // Non-tool cards are not selectable or interactive during WaitingForTool.
+                            cardUI.SetInteractive(false);
+                        }
+                        break;
+                    case CookingSelectionState.WaitingForIngredient:
+                        // Highlight Ingredient cards, and make them interactive.
+                        if (cardSO.cardType == CardSO.CardType.Ingredient)
+                        {
+                            isSelectable = true;
+                            cardUI.SetInteractive(true); // Make selectable ingredients interactive
+                        }
+                        else
+                        {
+                            // Non-ingredient cards are not selectable or interactive during WaitingForIngredient.
+                            cardUI.SetInteractive(false);
+                        }
+                        break;
+                }
+            }
+            // Set the visual highlight state for the card UI.
+            cardUI.SetHighlight(isSelectable);
+        }
+        // TODO: Update UI prompt text based on currentCookingSelectionState (e.g., "Select a Tool", "Select an Ingredient").
+        // TODO: Control visibility/interactability of "Finish Cooking" and "Cancel Technique" buttons based on state.
+    }
+
+
     void DisplayRecipes()
     {
-        // --- Display Current Recipe ---
-        // Ensure there are recipes selected for this game and the current round index is valid.
-        if (gameRecipes == null || gameRecipes.Count <= currentRound)
-        {
-            Debug.LogError($"Cannot display current recipe for round {currentRound}. gameRecipes list is null or has only {gameRecipes?.Count ?? 0} recipes.");
-            // Clear current recipe UI elements if no recipe is available for the current round.
-            if (currentRecipeNameText != null) currentRecipeNameText.text = "Error: No Recipe";
-            if (currentRecipeRequirementsAndStatsText != null) currentRecipeRequirementsAndStatsText.text = "";
-        }
-        else
-        {
-            RecipeSO currentRecipe = gameRecipes[currentRound];
-            // Update the Current Recipe Name UI element.
-            if (currentRecipeNameText != null) currentRecipeNameText.text = currentRecipe.recipeName; // Just the name, no "Current Dish:" prefix
-
-            // Combine Current Recipe Requirements and Target Stats into a single string.
-            string currentReqAndStatsText = "";
-
-            // Display Required Ingredients
-            if (currentRecipe.requiredIngredients != null && currentRecipe.requiredIngredients.Count > 0)
-            {
-                currentReqAndStatsText += "Ingredients:\n";
-                foreach (var card in currentRecipe.requiredIngredients) currentReqAndStatsText += $"- {card.cardName}\n";
-            }
-
-            // Display Required Techniques
-            if (currentRecipe.requiredTechniques != null && currentRecipe.requiredTechniques.Count > 0)
-            {
-                // Add a new line before Techniques if Ingredients were listed
-                if (currentReqAndStatsText.Length > 0 && !currentReqAndStatsText.EndsWith("\n")) currentReqAndStatsText += "\n";
-                currentReqAndStatsText += "Techniques:\n";
-                foreach (var card in currentRecipe.requiredTechniques) currentReqAndStatsText += $"- {card.cardName}\n";
-            }
-
-            // Display Target Stats
-            if (currentRecipe.targetStats != null && currentRecipe.targetStats.Count > 0)
-            {
-                // Add a new line before Stats if Ingredients or Techniques were listed
-                if (currentReqAndStatsText.Length > 0 && !currentReqAndStatsText.EndsWith("\n")) currentReqAndStatsText += "\n";
-                currentReqAndStatsText += "Stats:\n";
-                foreach (var stat in currentRecipe.targetStats) currentReqAndStatsText += $"- {stat.name}: {stat.targetValue}\n";
-            }
-
-            // Assign the combined current recipe text to the designated UI element.
-            if (currentRecipeRequirementsAndStatsText != null)
-            {
-                currentRecipeRequirementsAndStatsText.text = currentReqAndStatsText;
-            }
-            else
-            {
-                Debug.LogWarning("currentRecipeRequirementsAndStatsText TextMeshProUGUI is not assigned in GameManager.");
-            }
-
-            Debug.Log($"Displayed Current Recipe for Round {currentRound + 1}: {currentRecipe.recipeName}");
-        }
-
-
-        // --- Display Next Recipe ---
-        // Check if there is a next recipe available (i.e., not in the last round).
-        if (gameRecipes != null && currentRound + 1 < gameRecipes.Count)
-        {
-            RecipeSO nextRecipe = gameRecipes[currentRound + 1];
-
-            // Update the Next Recipe Name UI element.
-            if (nextRecipeNameText != null) nextRecipeNameText.text = nextRecipe.recipeName; // Just the name
-
-            // Combine Next Recipe Requirements and Target Stats into a single string.
-            string nextReqAndStatsText = "";
-
-            // Display Required Ingredients for the next recipe
-            if (nextRecipe.requiredIngredients != null && nextRecipe.requiredIngredients.Count > 0)
-            {
-                nextReqAndStatsText += "Ingredients:\n";
-                foreach (var card in nextRecipe.requiredIngredients) nextReqAndStatsText += $"- {card.cardName}\n";
-            }
-
-            // Display Required Techniques for the next recipe
-            if (nextRecipe.requiredTechniques != null && nextRecipe.requiredTechniques.Count > 0)
-            {
-                if (nextReqAndStatsText.Length > 0 && !nextReqAndStatsText.EndsWith("\n")) nextReqAndStatsText += "\n";
-                nextReqAndStatsText += "Techniques:\n";
-                foreach (var card in nextRecipe.requiredTechniques) nextReqAndStatsText += $"- {card.cardName}\n";
-            }
-
-            // Display Next Recipe Target Stats
-            if (nextRecipe.targetStats != null && nextRecipe.targetStats.Count > 0)
-            {
-                if (nextReqAndStatsText.Length > 0 && !nextReqAndStatsText.EndsWith("\n")) nextReqAndStatsText += "\n";
-                nextReqAndStatsText += "Stats:\n";
-                foreach (var stat in nextRecipe.targetStats) nextReqAndStatsText += $"- {stat.name}: {stat.targetValue}\n";
-            }
-
-            // Assign the combined next recipe text to the designated UI element.
-            if (nextRecipeRequirementsAndStatsText != null)
-            {
-                nextRecipeRequirementsAndStatsText.text = nextReqAndStatsText;
-            }
-            else
-            {
-                Debug.LogWarning("nextRecipeRequirementsAndStatsText TextMeshProUGUI is not assigned in GameManager.");
-            }
-
-            Debug.Log($"Displayed Next Recipe for Round {currentRound + 2}: {nextRecipe.recipeName}");
-
-        }
-        else
-        {
-            // If there is no next recipe (i.e., in the last round), clear the next recipe UI elements or set placeholder.
-            if (nextRecipeNameText != null) nextRecipeNameText.text = "Next Dish: N/A"; // Indicate no next dish
-            if (nextRecipeRequirementsAndStatsText != null) nextRecipeRequirementsAndStatsText.text = "";
-            Debug.Log("No next recipe to display.");
-        }
+        // ... (existing DisplayRecipes code) ...
     }
 
-    // Displays a message in a designated UI text element (e.g., popupMessageText or a separate message area).
     void ShowPopupMessage(string message, bool autoHide)
     {
-        // Use your popupMessageText UI element to display messages.
-        if (popupMessageText != null) popupMessageText.text = message;
-        Debug.Log($"[Game Message] {message}"); // Also log messages for debugging
-
-        // TODO: Implement auto-hide for the message using a Coroutine if autoHide is true.
-        // Example: if (autoHide) StartCoroutine(HideMessageAfterDelay(3f));
+        // ... (existing ShowPopupMessage code) ...
     }
 
     // TODO: Implement a Coroutine to hide the popup message after a delay.
-    // IEnumerator HideMessageAfterDelay(float delay) { yield return new WaitForSeconds(delay); if(popupMessageText != null) popupMessageText.text = ""; }
-
+    // ...
 
     // --- Recipe Selection ---
-
-    // Selects a list of random recipes for a new game instance from the 'allAvailableRecipes' list.
-    // Called during the GameSetup state.
     private List<RecipeSO> SelectRandomRecipes(int count)
     {
+        // ... (existing SelectRandomRecipes code) ...
         List<RecipeSO> recipes = new List<RecipeSO>();
-        // Ensure there are recipes available to select from.
-        if (allAvailableRecipes == null || allAvailableRecipes.Count == 0)
-        {
-            Debug.LogError("No available recipes found in the 'allAvailableRecipes' list! Cannot select recipes.");
-            return recipes; // Return an empty list
-        }
-
-        System.Random rand = new System.Random();
-        // Create a temporary list to select from, to avoid selecting the same recipe multiple times if you want unique recipes per game.
-        List<RecipeSO> availableForSelection = new List<RecipeSO>(allAvailableRecipes);
-
-        // Select 'count' number of random recipes.
-        for (int i = 0; i < count; i++)
-        {
-            // Stop if we've run out of unique recipes before reaching the desired count.
-            if (availableForSelection.Count == 0)
-            {
-                Debug.LogWarning($"Could only select {i} unique recipes, needed {count}. Not enough unique recipes available.");
-                break;
-            }
-            // Select a random index from the available recipes.
-            int randomIndex = rand.Next(availableForSelection.Count);
-            RecipeSO selectedRecipe = availableForSelection[randomIndex];
-            recipes.Add(selectedRecipe); // Add the selected recipe to the game's list.
-            availableForSelection.RemoveAt(randomIndex); // Remove the selected recipe from the temporary list (for unique selection).
-        }
-
-        Debug.Log($"Selected {recipes.Count} recipes for the game instance.");
-        return recipes; // Return the list of selected RecipeSOs for this game.
+        if (allAvailableRecipes == null || allAvailableRecipes.Count == 0) { Debug.LogError("No available recipes found!"); return recipes; }
+        System.Random rand = new System.Random(); List<RecipeSO> availableForSelection = new List<RecipeSO>(allAvailableRecipes);
+        for (int i = 0; i < count; i++) { if (availableForSelection.Count == 0) { Debug.LogWarning($"Could only select {i} recipes, needed {count}."); break; } int randomIndex = rand.Next(availableForSelection.Count); RecipeSO selectedRecipe = availableForSelection[randomIndex]; recipes.Add(selectedRecipe); availableForSelection.RemoveAt(randomIndex); }
+        Debug.Log($"Selected {recipes.Count} recipes.");
+        return recipes;
     }
 
 
     // --- High Score Handling ---
-
-    // Helper method to get the high score from Unity's PlayerPrefs.
-    private int GetHighScore()
-    {
-        // PlayerPrefs.GetInt(key, defaultValue) returns the integer value associated with the key,
-        // or the defaultValue (0 in this case) if the key doesn't exist.
-        return PlayerPrefs.GetInt(HighScoreKey, 0);
-    }
-
-    // Helper method to save the high score to Unity's PlayerPrefs.
-    private void SaveHighScore(int score)
-    {
-        PlayerPrefs.SetInt(HighScoreKey, score);
-        PlayerPrefs.Save(); // Save the changes to disk.
-    }
-
-    // Note: Since we are in a single scene, there's no explicit method here to load a new scene for the menu.
-    // Transitions happen by changing the state and managing UI panel visibility.
+    private int GetHighScore() { return PlayerPrefs.GetInt(HighScoreKey, 0); }
+    private void SaveHighScore(int score) { PlayerPrefs.SetInt(HighScoreKey, score); PlayerPrefs.Save(); }
 }

@@ -3,95 +3,103 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using UnityEngine.EventSystems; // Required for event systems like IPointerClickHandler
 
-public class CardDisplayUI : MonoBehaviour
+public class CardDisplayUI : MonoBehaviour // Consider inheriting from IPointerClickHandler if not using Button
 {
     [Header("UI Elements")]
     public TextMeshProUGUI nameText;
-    // Use this single TextMeshProUGUI for both description and stats
     public TextMeshProUGUI descriptionAndStatsText;
     public Image artworkImage;
+    public Button playButton; // Add a Button component to your card prefab and assign it here
+    // TODO: Add visual element for highlighting (e.g., an Image for an outline)
+    // public GameObject highlightIndicator;
 
-    // Optional: Reference to the CardSO this UI is displaying
-    private CardSO cardData;
 
-    // Optional: Reference to the GameManager for interactivity
-    private GameManager gameManager;
+    private CardSO cardData; // Store the CardSO reference
+    private GameManager gameManager; // Will be set by GameManager
+
+    void Awake()
+    {
+        if (playButton != null)
+        {
+            playButton.onClick.AddListener(OnCardClicked);
+        }
+        // If not using a Button, you would implement IPointerClickHandler and the OnPointerClick method
+    }
+
+    // Public getter for the CardSO data
+    public CardSO GetCardData()
+    {
+        return cardData;
+    }
+
 
     // Method to set the card data and update the UI
     public void SetCard(CardSO card)
     {
-        cardData = card; // Store the CardSO reference
+        cardData = card;
 
-        if (cardData == null)
-        {
-            Debug.LogError("CardDisplayUI received a null CardSO.");
-            // Clear the UI if the card data is null
-            if (nameText != null) nameText.text = "";
-            if (descriptionAndStatsText != null) descriptionAndStatsText.text = "";
-            if (artworkImage != null) artworkImage.sprite = null;
-            return;
-        }
+        if (cardData == null) { Debug.LogError("CardDisplayUI received a null CardSO."); if (nameText != null) nameText.text = ""; if (descriptionAndStatsText != null) descriptionAndStatsText.text = ""; if (artworkImage != null) artworkImage.sprite = null; if (playButton != null) playButton.interactable = false; return; }
 
-        // Update UI elements with data from the CardSO
         if (nameText != null) nameText.text = cardData.cardName;
         if (artworkImage != null && cardData.artwork != null) artworkImage.sprite = cardData.artwork;
 
-        // Combine Description and Stats into a single string
         string combinedText = cardData.description;
+        if (!string.IsNullOrEmpty(cardData.description) && cardData.GetStatsDictionary().Count > 0) { combinedText += "\n\nStats:\n"; }
+        foreach (var stat in cardData.GetStatsDictionary()) { combinedText += $"{stat.Key}: {stat.Value}\n"; }
+        if (descriptionAndStatsText != null) { descriptionAndStatsText.text = combinedText; } else { Debug.LogWarning("descriptionAndStatsText TextMeshProUGUI is not assigned."); }
 
-        // Add a separator if there's a description and also stats
-        if (!string.IsNullOrEmpty(cardData.description) && cardData.GetStatsDictionary().Count > 0)
-        {
-            combinedText += "\n\n"; // Add a couple of new lines between description and stats
-        }
-
-        // Append stats to the combined text
-        foreach (var stat in cardData.GetStatsDictionary())
-        {
-            combinedText += $"{stat.Key}: {stat.Value}\n";
-        }
-
-        // Assign the combined text to the designated TextMeshProUGUI element
-        if (descriptionAndStatsText != null)
-        {
-            descriptionAndStatsText.text = combinedText;
-        }
-        else
-        {
-            Debug.LogWarning("descriptionAndStatsText TextMeshProUGUI is not assigned in CardDisplayUI.");
-        }
-
-        // TODO: Implement displaying stats in a more visually appealing way if needed
-        // (e.g., using different formatting for stat names/values)
+        // TODO: Implement displaying stats in a more visually appealing way
     }
 
-    // Optional: Method to set interactivity (e.g., enable a Button component)
+    // Method to set interactivity (enable/disable the play button)
     public void SetInteractive(bool isInteractive)
     {
-        // Example if you have a Button component on your card prefab:
-        Button cardButton = GetComponent<Button>();
-        if (cardButton != null)
+        if (playButton != null)
         {
-            cardButton.interactable = isInteractive;
+            playButton.interactable = isInteractive;
         }
-        // TODO: Add logic for custom interaction handling (e.g., detecting clicks)
+        // TODO: If not using a Button, manage interaction detection here
     }
 
-    // Optional: Method to store a reference to the GameManager
+    // Method to set the visual highlight state
+    public void SetHighlight(bool isHighlighted)
+    {
+        // TODO: Implement visual highlighting (e.g., activate/deactivate a highlight indicator GameObject)
+        // if (highlightIndicator != null)
+        // {
+        //     highlightIndicator.SetActive(isHighlighted);
+        // }
+        Debug.Log($"Highlight for {cardData?.cardName} set to: {isHighlighted}"); // Log for testing
+    }
+
+    // Method to store a reference to the GameManager
     public void SetGameManager(GameManager manager)
     {
         gameManager = manager;
     }
 
-    // Optional: Method called when the card is clicked (if interactive)
-    // You would hook this up to a Button's OnClick event or a custom input handler.
-    // public void OnCardClicked()
-    // {
-    //     if (gameManager != null && cardData != null)
-    //     {
-    //         // Example: Call a method in GameManager to play this card during the CookingPhase
-    //         // gameManager.PlayCard(cardData);
-    //     }
-    // }
+    // Method called when the card UI (or its button) is clicked
+    public void OnCardClicked()
+    {
+        if (gameManager != null && cardData != null)
+        {
+            Debug.Log($"Card UI Clicked: {cardData.cardName}, Type: {cardData.cardType}");
+            // Call the PlayCard method in the GameManager, passing the card data
+            gameManager.PlayCard(cardData);
+        }
+        else
+        {
+            Debug.LogWarning("CardDisplayUI clicked but GameManager or cardData is not set.");
+        }
+    }
+
+    // If implementing IPointerClickHandler instead of Button:
+    /*
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        OnCardClicked(); // Call your click handling logic
+    }
+    */
 }
