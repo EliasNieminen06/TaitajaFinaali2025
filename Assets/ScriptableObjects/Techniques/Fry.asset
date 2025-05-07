@@ -15,5 +15,5 @@ MonoBehaviour:
   cardName: Fry
   cardType: 3
   description: Fry something on the pan!
-  artwork: {fileID: 21300000, guid: cc56b70e65d1fe748ae2ddd05e9560ef, type: 3}
+  artwork: {fileID: 21300000, guid: 6114917df7ee4584aa89e4438284e782, type: 3}
   statsList: []
