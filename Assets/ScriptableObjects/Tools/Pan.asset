@@ -15,5 +15,5 @@ MonoBehaviour:
   cardName: Pan
   cardType: 2
   description: Pan to use for frying!
-  artwork: {fileID: 21300000, guid: cc56b70e65d1fe748ae2ddd05e9560ef, type: 3}
+  artwork: {fileID: 21300000, guid: 0311aaf3ed735a84e962b2bf1826aff0, type: 3}
   statsList: []

@@ -15,5 +15,5 @@ MonoBehaviour:
   cardName: Leek
   cardType: 0
   description: Green good.
-  artwork: {fileID: 21300000, guid: cc56b70e65d1fe748ae2ddd05e9560ef, type: 3}
+  artwork: {fileID: 21300000, guid: 16fd17714c6644645a576470c600cd87, type: 3}
   statsList: []

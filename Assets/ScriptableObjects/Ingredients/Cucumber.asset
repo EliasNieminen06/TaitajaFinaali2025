@@ -15,5 +15,5 @@ MonoBehaviour:
   cardName: Cucumber
   cardType: 0
   description: Fresh!
-  artwork: {fileID: 21300000, guid: cc56b70e65d1fe748ae2ddd05e9560ef, type: 3}
+  artwork: {fileID: 21300000, guid: 4c8e807dc434c7b42a796fd6b2c99504, type: 3}
   statsList: []

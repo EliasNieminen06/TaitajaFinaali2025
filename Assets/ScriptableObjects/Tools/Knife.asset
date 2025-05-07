@@ -15,5 +15,5 @@ MonoBehaviour:
   cardName: Knife
   cardType: 2
   description: Knife to use for cutting!
-  artwork: {fileID: 21300000, guid: cc56b70e65d1fe748ae2ddd05e9560ef, type: 3}
+  artwork: {fileID: 21300000, guid: 383d18bba54cdc441b2bcfe94641f819, type: 3}
   statsList: []

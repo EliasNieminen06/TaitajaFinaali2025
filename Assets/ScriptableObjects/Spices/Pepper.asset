@@ -15,7 +15,7 @@ MonoBehaviour:
   cardName: Pepper
   cardType: 1
   description: Spicy!
-  artwork: {fileID: 21300000, guid: 8d0b9e91751f3594485b4569af3a1d2c, type: 3}
+  artwork: {fileID: 21300000, guid: 3cb666ff8eb5d82438b2436541a01acd, type: 3}
   statsList:
   - name: Spiciness
     value: 1

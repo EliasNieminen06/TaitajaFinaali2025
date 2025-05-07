@@ -15,5 +15,5 @@ MonoBehaviour:
   cardName: Salmon
   cardType: 0
   description: From the local lake.
-  artwork: {fileID: 21300000, guid: cc56b70e65d1fe748ae2ddd05e9560ef, type: 3}
+  artwork: {fileID: 21300000, guid: 51fc957cb1820244db7505fa7a13c5c9, type: 3}
   statsList: []
